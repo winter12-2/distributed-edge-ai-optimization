@@ -35,6 +35,8 @@ distributed-edge-ai-optimization/
 ├── results/           # ignored in GitHub
 └── .gitignore
 
+```
+
 ---
 
 ## Files Explanation
@@ -64,3 +66,4 @@ It does not train the model again. It creates the same CNN structure only so tha
 
 ```text
 models/baseline_model.pt
+```
