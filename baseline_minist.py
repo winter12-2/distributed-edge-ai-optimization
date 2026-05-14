@@ -79,7 +79,6 @@ for epoch in range(epochs):
         loss.backward()
 
         optimizer.step()
-        optimizer.zero_grad()
         running_loss += loss.item()
 
         loop.set_description(f"Epoch [{epoch+1}/{epochs}]")
