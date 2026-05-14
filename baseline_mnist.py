@@ -74,40 +74,6 @@ class CNN(nn.Module):
         x = self.fc1(x)
         return x
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-model  = CNN(in_channels=1, num_classes=10).to(device)
-print(model)
-
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-epochs = 5
-
-for epoch in range(epochs):
-    model.train()
-    running_loss = 0
-    loop = tqdm(train_loader, leave=True)
-
-    for batch_idx, (data, targets) in enumerate(loop):
-        data = data.to(device)
-        targets = targets.to(device)
-
-        scores = model(data)
-        loss = criterion(scores, targets)
-
-        optimizer.zero_grad()
-        loss.backward()
-
-        optimizer.step()
-        running_loss += loss.item()
-
-        loop.set_description(f"Epoch [{epoch+1}/{epochs}]")
-        loop.set_postfix(loss=loss.item())
-
-    avg_loss = running_loss / len(train_loader)
-
-    print(f"Epoch {epoch+1} Average Loss: {avg_loss:.4f}")
-
 def check_accuracy(loader, model):
     num_correct = 0
     num_samples = 0
@@ -128,44 +94,79 @@ def check_accuracy(loader, model):
     model.train()
     return accuracy
 
+if __name__ == "__main__":
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model  = CNN(in_channels=1, num_classes=10).to(device)
+    print(model)
 
-print("Checking accuracy on training set")
-train_acc = check_accuracy(train_loader, model)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-print("Checking accuracy on test data...")
-test_acc = check_accuracy(test_loader, model)
+    epochs = 5
 
-model_path = "models/baseline_model.pt"
-torch.save(model.state_dict(), model_path)
+    for epoch in range(epochs):
+        model.train()
+        running_loss = 0
+        loop = tqdm(train_loader, leave=True)
 
-print(f"Model saved to {model_path}")
+        for batch_idx, (data, targets) in enumerate(loop):
+            data = data.to(device)
+            targets = targets.to(device)
+
+            scores = model(data)
+            loss = criterion(scores, targets)
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            optimizer.step()
+            running_loss += loss.item()
+
+            loop.set_description(f"Epoch [{epoch+1}/{epochs}]")
+            loop.set_postfix(loss=loss.item())
+
+        avg_loss = running_loss / len(train_loader)
+
+        print(f"Epoch {epoch+1} Average Loss: {avg_loss:.4f}")
 
 
-#Add basic metrics
+    print("Checking accuracy on training set")
+    train_acc = check_accuracy(train_loader, model)
 
-model_size_mb = os.path.getsize("models/baseline_model.pt") / (1024 * 1024)
-print(f"Model Size: {model_size_mb:.2f} MB")
+    print("Checking accuracy on test data...")
+    test_acc = check_accuracy(test_loader, model)
 
-num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    model_path = "models/baseline_model.pt"
+    torch.save(model.state_dict(), model_path)
 
-print("\n===== METRICS SUMMARY =====")
-print(f"Train Accuracy: {train_acc:.2f}%")
-print(f"Test Accuracy:  {test_acc:.2f}%")
-print(f"Model Size:     {model_size_mb:.2f} MB")
-print(f"Parameters:     {num_params}")
+    print(f"Model saved to {model_path}")
 
-results = {
-    "train_accuracy": train_acc,
-    "test_accuracy": test_acc,
-    "model_size_mb": model_size_mb,
-    "parameters": num_params,
-    "epochs": epochs,
-    "batch_size": batch_size
-}
 
-results_path = "results/results_baseline.json"
+    #Add basic metrics
 
-with open(results_path, "w") as f:
-    json.dump(results, f, indent=4)
+    model_size_mb = os.path.getsize("models/baseline_model.pt") / (1024 * 1024)
+    print(f"Model Size: {model_size_mb:.2f} MB")
 
-print(f"Results saved to {results_path}")
+    num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    print("\n===== METRICS SUMMARY =====")
+    print(f"Train Accuracy: {train_acc:.2f}%")
+    print(f"Test Accuracy:  {test_acc:.2f}%")
+    print(f"Model Size:     {model_size_mb:.2f} MB")
+    print(f"Parameters:     {num_params}")
+
+    results = {
+        "train_accuracy": train_acc,
+        "test_accuracy": test_acc,
+        "model_size_mb": model_size_mb,
+        "parameters": num_params,
+        "epochs": epochs,
+        "batch_size": batch_size
+    }
+
+    results_path = "results/results_baseline.json"
+
+    with open(results_path, "w") as f:
+        json.dump(results, f, indent=4)
+
+    print(f"Results saved to {results_path}")
