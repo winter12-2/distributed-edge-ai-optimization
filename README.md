@@ -34,3 +34,33 @@ distributed-edge-ai-optimization/
 ├── models/            # ignored in GitHub
 ├── results/           # ignored in GitHub
 └── .gitignore
+
+---
+
+## Files Explanation
+
+### `baseline_mnist.py`
+
+This file trains the baseline CNN model using the MNIST dataset.
+
+It does the following:
+
+- Loads the MNIST dataset
+- Builds a small CNN model
+- Trains the model for 5 epochs
+- Checks training accuracy and test accuracy
+- Saves the trained model in the `models/` folder
+- Saves the baseline result in the `results/` folder
+
+The baseline model is the original model that we use for comparison.
+
+---
+
+### `optimized_quantized.py`
+
+This file creates the optimized quantized model.
+
+It does not train the model again. It creates the same CNN structure only so that it can load the trained baseline model weights from:
+
+```text
+models/baseline_model.pt
