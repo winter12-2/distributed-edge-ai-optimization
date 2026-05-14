@@ -1,3 +1,7 @@
 venv/
-dataset/
+data/
+models/
+results/
 *.pt
+__pycache__/
+*.pyc

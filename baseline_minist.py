@@ -1,7 +1,8 @@
 # import numpy as np
 # import pandas as pd
 # import matplotlib.pyplot as plt
-
+import os
+import json
 
 import torch
 from torch import optim
@@ -19,10 +20,29 @@ import torchvision.transforms as transforms
 
 batch_size = 60
 
-train_dataset = datasets.MNIST(root="dataset/", download=True, train=True, transform=transforms.ToTensor())
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+train_dataset = datasets.MNIST(
+    root="data/",
+    download=True,
+    train=True,
+    transform=transform
+)
+
+test_dataset = datasets.MNIST(
+    root="data/",
+    download=True,
+    train=False,
+    transform=transform
+)
 train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
-test_dataset = datasets.MNIST(root="dataset/", download=True, train=False, transform=transforms.ToTensor())
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+
+os.makedirs("models", exist_ok=True)
+os.makedirs("results", exist_ok=True)
 
 # def imshow(img):
 #    npimg = img.numpy()
@@ -103,25 +123,49 @@ def check_accuracy(loader, model):
             num_correct += (predictions == y).sum()
             num_samples += predictions.size(0)
 
-    accuracy = float(num_correct) / float(num_samples)
+    accuracy = float(num_correct) / float(num_samples) * 100
     print(f"Got {num_correct} / {num_samples} with accuracy {accuracy:.2f}")
     model.train()
     return accuracy
 
 
-print("Checking accuracy on test set")
-train_acc = check_accuracy(test_loader, model)
+print("Checking accuracy on training set")
+train_acc = check_accuracy(train_loader, model)
 
 print("Checking accuracy on test data...")
 test_acc = check_accuracy(test_loader, model)
 
+model_path = "models/baseline_model.pt"
+torch.save(model.state_dict(), model_path)
 
-torch.save(model.state_dict(), "baseline_model.pt")
+print(f"Model saved to {model_path}")
 
 
 #Add basic metrics
 
-import os
-
-model_size_mb = os.path.getsize("baseline_model.pt") / (1024 * 1024)
+model_size_mb = os.path.getsize("models/baseline_model.pt") / (1024 * 1024)
 print(f"Model Size: {model_size_mb:.2f} MB")
+
+num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+print("\n===== METRICS SUMMARY =====")
+print(f"Train Accuracy: {train_acc:.2f}%")
+print(f"Test Accuracy:  {test_acc:.2f}%")
+print(f"Model Size:     {model_size_mb:.2f} MB")
+print(f"Parameters:     {num_params}")
+
+results = {
+    "train_accuracy": train_acc,
+    "test_accuracy": test_acc,
+    "model_size_mb": model_size_mb,
+    "parameters": num_params,
+    "epochs": epochs,
+    "batch_size": batch_size
+}
+
+results_path = "results/results_baseline.json"
+
+with open(results_path, "w") as f:
+    json.dump(results, f, indent=4)
+
+print(f"Results saved to {results_path}")
