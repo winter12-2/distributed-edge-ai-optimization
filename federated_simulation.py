@@ -121,7 +121,7 @@ if __name__ == "__main__":
     plt.ylabel("Total Communication Cost (MB)")
     plt.title("Federated Communication Cost Comparison")
     plt.savefig("results/federated_communication_cost.png")
-    plt.show()
+    plt.close()
 
     print("\nSaved results to results/federated_simulation_results.csv")
     print("Saved summary to results/federated_simulation_summary.json")
