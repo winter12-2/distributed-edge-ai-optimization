@@ -5,6 +5,7 @@ import torchvision
 import torchvision.transforms as transforms
 import json
 import os
+from baseline_mnist import CNN
 
 # using cpu for quantization
 DEVICE = torch.device("cpu")
@@ -12,25 +13,6 @@ DEVICE = torch.device("cpu")
 # create folders
 os.makedirs("models", exist_ok=True)
 os.makedirs("results", exist_ok=True)
-
-
-# same cnn model from baseline
-class CNN(nn.Module):
-    def __init__(self):
-        super(CNN, self).__init__()
-
-        self.conv1 = nn.Conv2d(1, 8, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
-        self.conv2 = nn.Conv2d(8, 16, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(16 * 7 * 7, 10)
-
-    def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(x.size(0), -1)
-        x = self.fc1(x)
-        return x
-
 
 # function to test the model
 def evaluate(model, test_loader, criterion, device):
@@ -61,7 +43,8 @@ def evaluate(model, test_loader, criterion, device):
 
 # load test data
 transform = transforms.Compose([
-    transforms.ToTensor()
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
 ])
 
 test_dataset = torchvision.datasets.MNIST(
@@ -79,7 +62,7 @@ test_loader = torch.utils.data.DataLoader(
 
 
 # create baseline model structure
-model = CNN()
+model = CNN(in_channels=1, num_classes=10)
 
 # check if baseline model exists
 if not os.path.exists("models/baseline_model.pt"):
