@@ -18,7 +18,7 @@ import torchvision.transforms as transforms
 
 # import torchmetrics
 
-batch_size = 60
+batch_size = 64
 
 transform = transforms.Compose([
     transforms.ToTensor(),

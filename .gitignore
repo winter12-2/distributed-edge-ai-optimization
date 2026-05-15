@@ -1,6 +1,7 @@
 .venv/
 data/
 models/
+results/
 *.pt
 __pycache__/
 *.pyc
