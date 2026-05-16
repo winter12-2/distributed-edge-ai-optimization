@@ -1,8 +1,8 @@
 {
     "model_name": "Quantized Optimized MNIST CNN",
     "quantization_type": "PyTorch dynamic int8 quantization",
-    "test_accuracy": 98.7,
-    "test_loss": 0.04,
+    "test_accuracy": 98.46,
+    "test_loss": 0.0411,
     "model_size_mb": 0.0159,
     "parameters": 9098
 }

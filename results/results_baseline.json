@@ -1,6 +1,6 @@
 {
-    "train_accuracy": 99.035,
-    "test_accuracy": 98.69,
+    "train_accuracy": 99.095,
+    "test_accuracy": 98.49,
     "model_size_mb": 0.037575721740722656,
     "parameters": 9098,
     "epochs": 5,
