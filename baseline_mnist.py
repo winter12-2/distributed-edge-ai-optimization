@@ -17,6 +17,8 @@ import torchvision.datasets as datasets
 import torchvision.transforms as transforms
 
 # import torchmetrics
+os.makedirs("models", exist_ok=True)
+os.makedirs("results", exist_ok=True)
 
 batch_size = 64
 
@@ -38,11 +40,8 @@ test_dataset = datasets.MNIST(
     train=False,
     transform=transform
 )
-train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
-
-os.makedirs("models", exist_ok=True)
-os.makedirs("results", exist_ok=True)
 
 # def imshow(img):
 #    npimg = img.numpy()

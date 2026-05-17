@@ -14,6 +14,24 @@ DEVICE = torch.device("cpu")
 os.makedirs("models", exist_ok=True)
 os.makedirs("results", exist_ok=True)
 
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+test_dataset = torchvision.datasets.MNIST(
+    root="data",
+    train=False,
+    download=True,
+    transform=transform
+)
+
+test_loader = torch.utils.data.DataLoader(
+    test_dataset,
+    batch_size=64,
+    shuffle=False
+)
+
 # function to test the model
 def evaluate(model, test_loader, criterion, device):
     model.eval()
@@ -39,26 +57,6 @@ def evaluate(model, test_loader, criterion, device):
     accuracy = 100 * correct / total
 
     return avg_loss, accuracy
-
-
-# load test data
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
-])
-
-test_dataset = torchvision.datasets.MNIST(
-    root="data",
-    train=False,
-    download=True,
-    transform=transform
-)
-
-test_loader = torch.utils.data.DataLoader(
-    test_dataset,
-    batch_size=64,
-    shuffle=False
-)
 
 
 # create baseline model structure

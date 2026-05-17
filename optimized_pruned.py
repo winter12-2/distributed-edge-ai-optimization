@@ -13,6 +13,20 @@ DEVICE = torch.device("cpu")
 os.makedirs("models", exist_ok=True)
 os.makedirs("results", exist_ok=True)
 
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,), (0.3081,))
+])
+
+train_dataset = torchvision.datasets.MNIST(
+    root="data", train=True, download=True, transform=transform
+)
+test_dataset = torchvision.datasets.MNIST(
+    root="data", train=False, download=True, transform=transform
+)
+
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=64, shuffle=False)
 
 def evaluate(model, loader, criterion, device):
     model.eval()
@@ -92,21 +106,6 @@ def fine_tune(model, train_loader, criterion, device, epochs=2, lr=0.0005):
 
     return model
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
-])
-
-train_dataset = torchvision.datasets.MNIST(
-    root="data", train=True, download=True, transform=transform
-)
-test_dataset = torchvision.datasets.MNIST(
-    root="data", train=False, download=True, transform=transform
-)
-
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=64, shuffle=False)
-
 criterion = nn.CrossEntropyLoss()
 
 if not os.path.exists("models/baseline_model.pt"):
@@ -169,8 +168,8 @@ def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
     with open(results_path, "w") as f:
         json.dump(results, f, indent=4)
 
-    print(f"Model saved   → {model_path}")
-    print(f"Results saved → {results_path}")
+    print(f"Model saved to {model_path}")
+    print(f"Results saved to {results_path}")
 
     return results
 
