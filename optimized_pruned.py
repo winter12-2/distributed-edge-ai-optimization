@@ -131,10 +131,6 @@ def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
     elif pruning_type == "structured":
         model = apply_structured_pruning(model, amount=amount)
 
-    zeroed, total_w = count_zero_weights(model)
-    sparsity = 100 * zeroed / total_w if total_w > 0 else 0
-    print(f"Sparsity after pruning : {sparsity:.1f}%  ({zeroed}/{total_w} weights zeroed)")
-
     loss_before, acc_before = evaluate(model, test_loader, criterion, DEVICE)
     print(f"Accuracy before fine-tune : {acc_before:.2f}%")
 
@@ -143,6 +139,10 @@ def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
         model = fine_tune(model, train_loader, criterion, DEVICE, epochs=fine_tune_epochs)
 
     model = make_pruning_permanent(model)
+
+    zeroed, total_w = count_zero_weights(model)
+    sparsity = 100 * zeroed / total_w if total_w > 0 else 0
+    print(f"Sparsity after pruning : {sparsity:.1f}%  ({zeroed}/{total_w} weights zeroed)")
     loss_after, acc_after = evaluate(model, test_loader, criterion, DEVICE)
     print(f"Accuracy after  fine-tune : {acc_after:.2f}%")
 
