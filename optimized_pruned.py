@@ -200,4 +200,4 @@ if __name__ == "__main__":
     with open("results/results_pruning_summary.json", "w") as f:
         json.dump(all_results, f, indent=4)
 
-    print("\nCombined summary saved → results/results_pruning_summary.json")
+    print("\nCombined summary saved to results/results_pruning_summary.json")
