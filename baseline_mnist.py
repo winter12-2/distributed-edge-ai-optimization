@@ -40,8 +40,8 @@ test_dataset = datasets.MNIST(
     train=False,
     transform=transform
 )
-train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=False)
-test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=True)
+train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size, shuffle=True)
+test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size, shuffle=False)
 
 # def imshow(img):
 #    npimg = img.numpy()
