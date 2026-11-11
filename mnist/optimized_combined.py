@@ -1,6 +1,9 @@
 import time
 import json
 import os
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
 
 import torch
 import torch.nn as nn

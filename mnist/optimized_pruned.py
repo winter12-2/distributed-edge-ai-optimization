@@ -6,6 +6,9 @@ import torchvision
 import torchvision.transforms as transforms
 import json
 import os
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
 from baseline_mnist import CNN
 
 DEVICE = torch.device("cpu")

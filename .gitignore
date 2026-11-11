@@ -2,7 +2,14 @@
 data/
 models/
 results/
+!mnist/results/
+mnist/results/*
+!mnist/results/results_baseline.json
+!mnist/results/results_quantized.json
+!mnist/results/federated_communication_cost.png
+!cifar10/results/
+cifar10/results/*
+!cifar10/results/results_baseline.json
 *.pt
 __pycache__/
 *.pyc
-run_everything.py

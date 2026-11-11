@@ -1,69 +1,63 @@
 # Distributed Edge AI Optimization
 
-This project focuses on improving the efficiency of AI models for edge devices. Edge devices usually have limited memory, battery, and processing power, so running large AI models can be difficult. In this project, we train a baseline MNIST CNN model and then apply model optimization using quantization to reduce model size while keeping good accuracy.
+CNN compression and federated communication experiments, separated by dataset.
 
----
-
-## Project Goal
-
-The main goal of this project is to compare a normal baseline AI model with an optimized quantized model.
-
-We compare:
-
-- Test accuracy
-- Model size
-- Number of parameters
-- Suitability for edge devices
-
----
-
-## Project Structure
+## Layout
 
 ```text
-distributed-edge-ai-optimization/
-│
-├── baseline_mnist.py
-├── optimized_quantized.py
-├── federated_simulation.py
-├── requirements.txt
-├── README.md
-│
-├── notebooks/
-│
-├── data/              # ignored in GitHub
-├── models/            # ignored in GitHub
-├── results/           # ignored in GitHub
-└── .gitignore
-
+mnist/
+    baseline_mnist.py
+    optimized_quantized.py
+    optimized_pruned.py
+    optimized_combined.py
+    federated_simulation.py
+    notebooks/
+    plots_analysis/
+    data/
+    models/
+    results/
+cifar10/
+    baseline_cifar10.py
+    data/
+    models/
+    results/
+run_everything.py
+requirements.txt
 ```
 
----
+Existing MNIST artifacts are preserved in `mnist/`. The root runner runs the
+five MNIST scripts in their original order. Generated data, models, and results
+directories are ignored by Git unless files were already tracked.
 
-## Files Explanation
+## Run
 
-### `baseline_mnist.py`
+From the repository root using the existing Windows environment:
 
-This file trains the baseline CNN model using the MNIST dataset.
+```powershell
+# CIFAR-10 baseline
+.\venv\Scripts\python.exe cifar10\baseline_cifar10.py
 
-It does the following:
+# Full MNIST pipeline, including baseline retraining
+.\venv\Scripts\python.exe run_everything.py
 
-- Loads the MNIST dataset
-- Builds a small CNN model
-- Trains the model for 5 epochs
-- Checks training accuracy and test accuracy
-- Saves the trained model in the `models/` folder
-- Saves the baseline result in the `results/` folder
-
-The baseline model is the original model that we use for comparison.
-
----
-
-### `optimized_quantized.py`
-
-This file creates the optimized quantized model.
-
-It does not train the model again. It creates the same CNN structure only so that it can load the trained baseline model weights from:
-
-```text
-models/baseline_model.pt
+# A single MNIST experiment
+.\venv\Scripts\python.exe mnist\optimized_quantized.py
 ```
+
+Open MNIST notebooks with `mnist/notebooks/` as the notebook working directory.
+
+## CIFAR-10 Baseline
+
+The CIFAR-10 experiment preserves the MNIST baseline procedure: convolution
+layers with 8 and 16 output channels, ReLU, two max pooling layers, a linear
+classifier, cross-entropy, Adam at 0.001, batch size 64, and five epochs.
+No augmentation, architecture search, or accuracy tuning is applied.
+
+Only input-dependent dimensions change: three RGB channels instead of one,
+and `16 * 8 * 8` classifier inputs instead of `16 * 7 * 7` because CIFAR-10
+images are 32x32. The original normalization mean 0.1307 and standard deviation
+0.3081 are repeated across RGB channels.
+
+Outputs are `cifar10/models/baseline_model.pt` and
+`cifar10/results/results_baseline.json`, including epoch losses and training
+settings. Training is stochastic, as in the original MNIST code.
