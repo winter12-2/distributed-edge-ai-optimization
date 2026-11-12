@@ -1,0 +1,125 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torchvision
+import torchvision.transforms as transforms
+import json
+import os
+from pathlib import Path
+
+os.chdir(Path(__file__).resolve().parent)
+from baseline_cifar10 import CNN
+
+# using cpu for quantization
+DEVICE = torch.device("cpu")
+
+# create folders
+os.makedirs("models", exist_ok=True)
+os.makedirs("results", exist_ok=True)
+
+transform = transforms.Compose([
+    transforms.ToTensor(),
+    transforms.Normalize((0.1307,) * 3, (0.3081,) * 3)
+])
+
+test_dataset = torchvision.datasets.CIFAR10(
+    root="data",
+    train=False,
+    download=True,
+    transform=transform
+)
+
+test_loader = torch.utils.data.DataLoader(
+    test_dataset,
+    batch_size=64,
+    shuffle=False
+)
+
+# function to test the model
+def evaluate(model, test_loader, criterion, device):
+    model.eval()
+    total_loss = 0
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for images, labels in test_loader:
+            images = images.to(device)
+            labels = labels.to(device)
+
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+
+            total_loss += loss.item()
+            _, predicted = torch.max(outputs, 1)
+
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+
+    avg_loss = total_loss / len(test_loader)
+    accuracy = 100 * correct / total
+
+    return avg_loss, accuracy
+
+
+# create baseline model structure
+model = CNN(in_channels=3, num_classes=10)
+
+# check if baseline model exists
+if not os.path.exists("models/baseline_model.pt"):
+    print("Error: baseline_model.pt not found. Run baseline_cifar10.py first.")
+    exit()
+
+# load trained baseline weights
+model.load_state_dict(torch.load("models/baseline_model.pt", map_location=DEVICE))
+model.to(DEVICE)
+model.eval()
+
+print("Baseline model loaded successfully.")
+
+# count parameters before quantization
+total_params = sum(p.numel() for p in model.parameters())
+
+# apply dynamic quantization
+# this mainly quantizes the linear layer
+quantized_model = torch.quantization.quantize_dynamic(
+    model,
+    {nn.Linear},
+    dtype=torch.qint8
+)
+
+print("Dynamic quantization applied.")
+
+# test quantized model
+criterion = nn.CrossEntropyLoss()
+test_loss, test_acc = evaluate(quantized_model, test_loader, criterion, DEVICE)
+
+print(f"Quantized Model Test Accuracy: {test_acc:.2f}%")
+
+# save quantized model
+quantized_model_path = "models/quantized_model.pt"
+torch.save(quantized_model.state_dict(), quantized_model_path)
+
+# calculate model size
+model_size_mb = os.path.getsize(quantized_model_path) / (1024 * 1024)
+
+# save results
+results = {
+    "model_name": "Quantized Optimized CIFAR-10 CNN",
+    "quantization_type": "PyTorch dynamic int8 quantization",
+    "test_accuracy": round(test_acc, 2),
+    "test_loss": round(test_loss, 4),
+    "model_size_mb": round(model_size_mb, 4),
+    "parameters": total_params
+}
+
+with open("results/results_quantized.json", "w") as f:
+    json.dump(results, f, indent=4)
+
+print("Quantized model saved to models/quantized_model.pt")
+print("Results saved to results/results_quantized.json")
+
+print("\n===== QUANTIZED MODEL SUMMARY =====")
+print(f"Test Accuracy: {test_acc:.2f}%")
+print(f"Model Size:    {model_size_mb:.4f} MB")
+print(f"Parameters:    {total_params}")
