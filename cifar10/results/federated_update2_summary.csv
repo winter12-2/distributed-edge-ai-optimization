@@ -1,0 +1,7 @@
+experiment,partition,heterogeneous,compression,final_accuracy,best_accuracy,rounds_to_45pct,mean_round_time_s,total_time_s,mean_completion_rate,total_comm_mb,dropped_ram,dropped_offline,dropped_deadline,max_est_train_mem_mb
+iid_ideal,iid,False,none,0.3945,0.3945,,2.03,20.3,1.0,8.88,0,0,0,4.26
+noniid_a0.5_ideal,dirichlet(alpha=0.5),False,none,0.3156,0.3296,,1.87,18.7,1.0,8.88,0,0,0,4.26
+noniid_a0.1_ideal,dirichlet(alpha=0.1),False,none,0.3167,0.3167,,1.83,18.3,1.0,8.88,0,0,0,4.26
+iid_hetero,iid,True,none,0.3708,0.3708,,3.44,34.4,0.62,8.57,0,7,31,4.26
+noniid_a0.5_hetero,dirichlet(alpha=0.5),True,none,0.1745,0.2187,,5.31,53.1,0.63,8.57,0,7,30,4.26
+noniid_a0.5_hetero_int8,dirichlet(alpha=0.5),True,int8,0.1711,0.2348,,4.16,41.6,0.57,5.48,0,7,36,4.26

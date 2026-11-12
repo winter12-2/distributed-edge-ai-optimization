@@ -1,0 +1,63 @@
+{
+  "args": {
+    "preset": "all",
+    "tag": "custom",
+    "partition": "dirichlet",
+    "alpha": 0.5,
+    "hetero": false,
+    "compress": "none",
+    "clients": 10,
+    "rounds": 10,
+    "local_epochs": 1,
+    "batch_size": 32,
+    "lr": 0.03,
+    "ram_policy": "adapt",
+    "deadline_factor": 4.0,
+    "target_acc": 0.45,
+    "data_fraction": 0.1,
+    "seed": 42,
+    "quick": false
+  },
+  "tiers": {
+    "high": {
+      "ram_mb": 64.0,
+      "threads": 4,
+      "cpu_speed": 1.0,
+      "bandwidth_mbps": 50.0,
+      "dropout": 0.02
+    },
+    "mid": {
+      "ram_mb": 8.0,
+      "threads": 2,
+      "cpu_speed": 0.6,
+      "bandwidth_mbps": 10.0,
+      "dropout": 0.05
+    },
+    "low": {
+      "ram_mb": 4.0,
+      "threads": 1,
+      "cpu_speed": 0.35,
+      "bandwidth_mbps": 1.0,
+      "dropout": 0.1
+    },
+    "tiny": {
+      "ram_mb": 1.0,
+      "threads": 1,
+      "cpu_speed": 0.2,
+      "bandwidth_mbps": 0.25,
+      "dropout": 0.15
+    }
+  },
+  "tier_mix": [
+    "high",
+    "high",
+    "mid",
+    "mid",
+    "mid",
+    "low",
+    "low",
+    "low",
+    "tiny",
+    "tiny"
+  ]
+}
