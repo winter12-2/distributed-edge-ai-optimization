@@ -1,0 +1,35 @@
+{
+    "dataset": "CIFAR-10",
+    "train_accuracy": 78.38,
+    "test_accuracy": 75.87,
+    "model_size_mb": 0.6728715896606445,
+    "parameters": 173482,
+    "epochs": 5,
+    "batch_size": 64,
+    "learning_rate": 0.001,
+    "optimizer": "Adam",
+    "normalization_mean": [
+        0.4914,
+        0.4822,
+        0.4465
+    ],
+    "normalization_std": [
+        0.247,
+        0.2435,
+        0.2616
+    ],
+    "epoch_losses": [
+        1.2828928647596207,
+        0.9308777849387635,
+        0.803457304187443,
+        0.7355034016739682,
+        0.6808267067308011
+    ],
+    "device": "cpu",
+    "architecture": "CIFAR10CNN",
+    "train_augmentation": [
+        "reflect-padded random crop (4 px)",
+        "random horizontal flip"
+    ],
+    "seed": 42
+}

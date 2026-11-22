@@ -34,7 +34,16 @@ directories are ignored by Git unless files were already tracked.
 From the repository root using the existing Windows environment:
 
 ```powershell
-# CIFAR-10 baseline
+# Tuned CIFAR-10 baseline (40 epochs)
+.\venv\Scripts\python.exe cifar10\baseline_cifar10.py --tuned --seed 42
+
+# Tuned baseline with RandomErasing
+.\venv\Scripts\python.exe cifar10\baseline_cifar10.py --tuned --random-erasing --seed 42
+
+# Five-epoch CIFAR-10 reference
+.\venv\Scripts\python.exe cifar10\baseline_cifar10.py --improved --seed 42
+
+# Original CIFAR-10 baseline
 .\venv\Scripts\python.exe cifar10\baseline_cifar10.py
 
 # CIFAR-10 quantization, four pruning variants, combined compression,
@@ -56,7 +65,36 @@ From the repository root using the existing Windows environment:
 
 Open MNIST notebooks with `mnist/notebooks/` as the notebook working directory.
 
-## CIFAR-10 Baseline
+## Improved CIFAR-10 Baseline
+
+The improved RGB CNN uses four 3×3 convolutions with 32, 64, 96, and 96
+output channels, batch normalization, ReLU, and three max-pooling stages.
+A linear classifier takes the final 4×4 feature maps. Training uses random
+crops with four pixels of reflection padding and random horizontal flips.
+Both accuracy measurements use unaugmented images and CIFAR-10 per-channel
+normalization.
+
+The default training budget matches the original experiment at five epochs,
+batch size 64, cross-entropy, and Adam at 0.001. The command above uses seed 42
+and writes `cifar10/models/baseline_improved_model.pt` and
+`cifar10/results/results_baseline_improved.json`.
+
+The tuned recipe uses the same CNN for 40 epochs with AdamW, weight decay
+0.05, label smoothing 0.1, and a cosine OneCycleLR schedule with peak learning
+rate 0.003. It holds out a fixed 5,000 images from the training split for
+validation each epoch. The final test accuracy uses the full official test
+split. The five-epoch reference trained on all 50,000 training images, so
+the trained models use different training splits.
+
+`--random-erasing` adds an erasing variant of the tuned recipe with probability
+0.25 and an area range of 2–20% of each image. Validation and test preprocessing
+stay deterministic. The two tuned runs write their checkpoints under
+`cifar10/models/` as `baseline_tuned_model.pt` and
+`baseline_tuned_erasing_model.pt`, with matching metric files
+`results_baseline_tuned.json` and `results_baseline_tuned_erasing.json` under
+`cifar10/results/`.
+
+## Original CIFAR-10 Baseline
 
 The CIFAR-10 experiment preserves the MNIST baseline procedure: convolution
 layers with 8 and 16 output channels, ReLU, two max pooling layers, a linear
@@ -82,7 +120,8 @@ federated settings are preserved: dynamic int8 quantization of Linear layers;
 0.0005; combined 30% unstructured pruning plus int8; five federated clients,
 ten rounds, one local epoch, batch size 64, and Adam at 0.001.
 
-The runner reuses the saved baseline with `--skip-baseline`. Federated modes
+The runner and compression scripts use the original CNN and checkpoint.
+The runner reuses the saved original baseline with `--skip-baseline`. Federated modes
 start from new random models, as in MNIST, and train separately. Accuracy
 differences are single-run observations, not controlled multi-seed comparisons.
 Pruned models receive two extra fine-tuning epochs, so accuracy gains over the

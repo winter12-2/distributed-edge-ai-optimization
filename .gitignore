@@ -10,6 +10,9 @@ mnist/results/*
 !cifar10/results/
 cifar10/results/*
 !cifar10/results/results_baseline.json
+!cifar10/results/results_baseline_improved.json
+!cifar10/results/results_baseline_tuned.json
+!cifar10/results/results_baseline_tuned_erasing.json
 *.pt
 __pycache__/
 *.pyc
