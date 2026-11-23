@@ -1,0 +1,7 @@
+experiment,model,partition,heterogeneous,fedprox_mu,client_selection,final_accuracy,best_accuracy,mean_last3_accuracy,mean_round_time_s,mean_completion_rate,total_comm_mb,mean_work_fraction,dropped_ram,dropped_offline,dropped_deadline,skipped_selection,max_est_train_mem_mb
+u3_iid_ideal,improved,iid,False,0.0,False,0.4281,0.4296,0.4233,2.83,1.0,132.8,1.0,0,0,0,0,50.74
+u3_noniid_ideal,improved,dirichlet(alpha=0.5),False,0.0,False,0.382,0.3829,0.3804,5.09,1.0,132.8,1.0,0,0,0,0,50.74
+u3_noniid_hetero_fedavg,improved,dirichlet(alpha=0.5),True,0.0,False,0.3577,0.3603,0.3559,3.79,0.68,128.15,1.0,0,7,25,0,50.74
+u3_noniid_hetero_fedprox,improved,dirichlet(alpha=0.5),True,0.01,False,0.36,0.36,0.3451,4.09,0.66,128.15,1.0,0,7,27,0,50.74
+u3_noniid_hetero_selection,improved,dirichlet(alpha=0.5),True,0.0,True,0.2762,0.3005,0.291,3.41,0.76,109.56,0.903,0,7,3,14,50.74
+u3_noniid_hetero_both,improved,dirichlet(alpha=0.5),True,0.01,True,0.3147,0.3147,0.2838,3.3,0.74,106.91,0.925,0,7,3,16,50.74

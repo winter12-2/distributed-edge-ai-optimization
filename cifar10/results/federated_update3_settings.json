@@ -1,0 +1,62 @@
+{
+  "args": {
+    "model": "improved",
+    "only": null,
+    "alpha": 0.5,
+    "mu": 0.01,
+    "compress": "none",
+    "clients": 10,
+    "rounds": 10,
+    "local_epochs": 1,
+    "batch_size": 32,
+    "lr": 0.03,
+    "deadline_factor": 4.0,
+    "safety": 0.8,
+    "min_work": 0.1,
+    "data_fraction": 0.1,
+    "seed": 42,
+    "quick": false
+  },
+  "tiers": {
+    "high": {
+      "ram_mb": 256.0,
+      "threads": 4,
+      "cpu_speed": 1.0,
+      "bandwidth_mbps": 100.0,
+      "dropout": 0.02
+    },
+    "mid": {
+      "ram_mb": 64.0,
+      "threads": 2,
+      "cpu_speed": 0.6,
+      "bandwidth_mbps": 50.0,
+      "dropout": 0.05
+    },
+    "low": {
+      "ram_mb": 16.0,
+      "threads": 1,
+      "cpu_speed": 0.35,
+      "bandwidth_mbps": 20.0,
+      "dropout": 0.1
+    },
+    "tiny": {
+      "ram_mb": 8.0,
+      "threads": 1,
+      "cpu_speed": 0.2,
+      "bandwidth_mbps": 5.0,
+      "dropout": 0.15
+    }
+  },
+  "tier_mix": [
+    "high",
+    "high",
+    "mid",
+    "mid",
+    "mid",
+    "low",
+    "low",
+    "low",
+    "tiny",
+    "tiny"
+  ]
+}
