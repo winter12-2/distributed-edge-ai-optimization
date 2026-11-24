@@ -50,6 +50,12 @@ From the repository root using the existing Windows environment:
 # Tuned baseline with RandomErasing
 .\venv\Scripts\python.exe cifar10\baseline_cifar10.py --tuned --random-erasing --seed 42
 
+# Tuned CIFAR-10 channel pruning with a two-epoch recovery pilot
+.\venv\Scripts\python.exe cifar10\prune_tuned.py --epochs 2 --unstructured 0.60
+
+# Full recovery comparison at the 25% size target
+.\venv\Scripts\python.exe cifar10\prune_tuned.py --epochs 20 --targets 0.25
+
 # Five-epoch CIFAR-10 reference
 .\venv\Scripts\python.exe cifar10\baseline_cifar10.py --improved --seed 42
 
@@ -87,7 +93,7 @@ Open MNIST notebooks with `mnist/notebooks/` as the notebook working directory.
 `federated_noniid.py` additionally requires `psutil` and `matplotlib`
 (`pip install psutil matplotlib`).
 
-## CIFAR-10 Baseline
+## Original CIFAR-10 Baseline
 
 The CIFAR-10 experiment preserves the MNIST baseline procedure: convolution
 layers with 8 and 16 output channels, ReLU, two max pooling layers, a linear
@@ -102,6 +108,43 @@ images are 32x32. The original normalization mean 0.1307 and standard deviation
 Outputs are `cifar10/models/baseline_model.pt` and
 `cifar10/results/results_baseline.json`, including epoch losses and training
 settings. Training is stochastic, as in the original MNIST code.
+
+## Pruning the Tuned CIFAR-10 CNN
+
+`prune_tuned.py` starts from the 40-epoch CIFAR-10 checkpoint. It compares
+filter L1 and BatchNorm scale rankings on the original validation split,
+retaining at least 16 channels per layer. The 25% and 50% targets constrain
+both parameter count and serialized FP32 checkpoint size. The experiment
+also records estimated convolution and linear multiply-accumulates.
+
+The dense continuation, one-shot pruning, and gradual pruning share the
+same fine-tuning budget, augmentation, and cosine learning rate schedule.
+The default 20-epoch run records validation accuracy at epochs 2, 10,
+and 20. Use `--distill` to add a separate student trained against the
+frozen dense checkpoint. Validation selects the winner at each target
+for test evaluation, warmed-up batch-1 CPU latency, and dynamic INT8
+quantization of the classifier.
+
+Reports are written under `cifar10/results/pruning/` and model files under
+`cifar10/models/pruning/`. Pruned checkpoints contain channel widths and
+a state dict, and can be restored with `load_artifact(path)`. The optional
+`--unstructured` experiment exports dense and CSR-encoded checkpoints.
+CSR in this experiment saves storage and restores dense tensors for inference.
+Add `--unstructured-only` to run that comparison with the dense control.
+
+For repeat runs, use `--seed`, `--selection`, and `--only` to keep the compact
+architecture and recovery method fixed. Pass a separately trained tuned
+checkpoint with `--checkpoint` for each seed to include baseline-training
+variation. `--summarize REPORT REPORT ...` prints means and sample standard
+deviations for matching configurations. Use `--run-tag` to distinguish runs
+with the same source filename, seed, and epoch count.
+
+In the seed-42, 20-epoch run at the 25% target, the validation-selected
+one-shot model kept widths `32, 64, 96, 48`. It reached 87.82% test
+accuracy versus 88.34% for the matched dense control and used 507,157 bytes
+versus 704,533 bytes (28.0% less). Classifier INT8 kept the same test accuracy
+and reduced the file to 484,943 bytes. Median batch-1 CPU latency was
+0.508 ms for the compact FP32 model and 0.669 ms for the INT8 variant.
 
 ## CIFAR-10 Algorithm Transfer
 

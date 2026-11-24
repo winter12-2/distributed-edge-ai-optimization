@@ -21,6 +21,7 @@ VALIDATION_SIZE = 5_000
 VALIDATION_SPLIT_SEED = 42
 ERASING_PROBABILITY = 0.25
 ERASING_SCALE = (0.02, 0.20)
+CIFAR10_WIDTHS = (32, 64, 96, 96)
 
 
 class CNN(nn.Module):
@@ -39,26 +40,27 @@ class CNN(nn.Module):
 
 
 class CIFAR10CNN(nn.Module):
-    def __init__(self, in_channels=3, num_classes=10):
+    def __init__(self, in_channels=3, num_classes=10, *, widths=CIFAR10_WIDTHS):
         super().__init__()
+        first, second, third, fourth = widths
         self.features = nn.Sequential(
-            nn.Conv2d(in_channels, 32, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(in_channels, first, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(first),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(first, second, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(second),
             nn.ReLU(),
             nn.MaxPool2d(2),
-            nn.Conv2d(64, 96, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(96),
+            nn.Conv2d(second, third, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(third),
             nn.ReLU(),
-            nn.Conv2d(96, 96, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(96),
+            nn.Conv2d(third, fourth, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(fourth),
             nn.ReLU(),
             nn.MaxPool2d(2),
         )
-        self.classifier = nn.Linear(96 * 4 * 4, num_classes)
+        self.classifier = nn.Linear(fourth * 4 * 4, num_classes)
 
     def forward(self, x):
         return self.classifier(self.features(x).flatten(1))
@@ -90,6 +92,12 @@ def check_accuracy(loader, model, device):
             correct += (predictions == labels.to(device)).sum().item()
             total += labels.size(0)
     return 100 * correct / total
+
+
+def tuned_split_indices(dataset_size):
+    generator = torch.Generator().manual_seed(VALIDATION_SPLIT_SEED)
+    indices = torch.randperm(dataset_size, generator=generator).tolist()
+    return indices[VALIDATION_SIZE:], indices[:VALIDATION_SIZE]
 
 
 def main():
@@ -139,10 +147,8 @@ def main():
     train_eval_dataset = copy(train_dataset)
     train_eval_dataset.transform = eval_transform
     if args.tuned:
-        split_generator = torch.Generator().manual_seed(VALIDATION_SPLIT_SEED)
-        indices = torch.randperm(len(train_dataset), generator=split_generator).tolist()
-        train_indices = indices[VALIDATION_SIZE:]
-        validation_dataset = Subset(train_eval_dataset, indices[:VALIDATION_SIZE])
+        train_indices, validation_indices = tuned_split_indices(len(train_dataset))
+        validation_dataset = Subset(train_eval_dataset, validation_indices)
         validation_loader = DataLoader(validation_dataset, batch_size=batch_size, shuffle=False)
         train_dataset = Subset(train_dataset, train_indices)
         train_eval_dataset = Subset(train_eval_dataset, train_indices)
