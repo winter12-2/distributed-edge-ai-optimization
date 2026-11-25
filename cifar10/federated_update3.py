@@ -2,6 +2,7 @@ import argparse
 import copy
 import json
 import os
+from pathlib import Path
 import time
 
 import numpy as np
@@ -9,13 +10,13 @@ import pandas as pd
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, Subset
-from torchvision import datasets, transforms
 
 import baseline_cifar10 as base
 from federated_noniid import (
     activation_bytes_per_image,
     evaluate,
     fedavg,
+    get_datasets,
     label_counts,
     partition_dirichlet,
     partition_iid,
@@ -23,10 +24,10 @@ from federated_noniid import (
     state_bytes,
     training_memory_mb,
 )
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 ROOT = base.ROOT
 RESULTS_DIR = ROOT / "results"
-DATA_DIR = ROOT / "data"
 
 
 CLIENT_TIERS = {
@@ -47,21 +48,10 @@ PRESETS = [
 ]
 
 
-def build_model(name):
+def build_model(name, checkpoint=None):
     if name == "improved":
-        return base.CIFAR10CNN()
+        return load_tuned_model(Path(checkpoint) if checkpoint else TUNED_CHECKPOINT)
     return base.CNN()
-
-
-def get_datasets(model_name):
-    if model_name == "improved":
-        mean, std = base.CIFAR10_MEAN, base.CIFAR10_STD
-    else:
-        mean, std = (0.1307,) * 3, (0.3081,) * 3
-    tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean, std)])
-    train = datasets.CIFAR10(DATA_DIR, train=True, download=True, transform=tf)
-    test = datasets.CIFAR10(DATA_DIR, train=False, download=True, transform=tf)
-    return train, test
 
 
 def local_train(global_model, dataset, indices, batch_size, epochs, lr, threads, mu):
@@ -114,7 +104,9 @@ def run_experiment(cfg, args, train_set, test_loader, labels):
             p["threads"] = min(p["threads"], max_threads)
             profiles.append(p)
 
-    global_model = build_model(args.model)
+    global_model = build_model(args.model, args.checkpoint)
+    _, initial_accuracy = evaluate(global_model, test_loader)
+    print(f"  Initial model accuracy: {initial_accuracy:.4f}")
     param_bytes = sum(p.numel() * 4 for p in global_model.parameters())
     act_bytes = activation_bytes_per_image(global_model)
     download_bytes = state_bytes(global_model.state_dict(), "none")
@@ -223,6 +215,7 @@ def run_experiment(cfg, args, train_set, test_loader, labels):
         "heterogeneous": cfg["hetero"],
         "fedprox_mu": mu,
         "client_selection": cfg["selection"],
+        "initial_test_accuracy": initial_accuracy,
         "final_accuracy": rounds_df["test_accuracy"].iloc[-1],
         "best_accuracy": rounds_df["test_accuracy"].max(),
         "mean_last3_accuracy": round(rounds_df["test_accuracy"].tail(3).mean(), 4),
@@ -239,6 +232,8 @@ def run_experiment(cfg, args, train_set, test_loader, labels):
 def parse_args():
     p = argparse.ArgumentParser(description="Update 3: FedProx and hardware-aware client selection")
     p.add_argument("--model", choices=["improved", "original"], default="improved")
+    p.add_argument("--checkpoint", help="Override the tuned checkpoint for the improved model.")
+    p.add_argument("--output-dir", help="Directory for this run's metrics.")
     p.add_argument("--only", nargs="+", help="run only these experiment tags")
     p.add_argument("--alpha", type=float, default=0.5)
     p.add_argument("--mu", type=float, default=0.01, help="FedProx strength used by the FedProx runs")
@@ -254,12 +249,19 @@ def parse_args():
     p.add_argument("--data-fraction", type=float, default=0.1)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--quick", action="store_true", help="tiny run to check the code works")
-    return p.parse_args()
+    args = p.parse_args()
+    if args.model == "original" and args.checkpoint:
+        p.error("--checkpoint is for the improved model")
+    return args
 
 
 def main():
+    global RESULTS_DIR
     args = parse_args()
-    RESULTS_DIR.mkdir(exist_ok=True)
+    if args.model == "improved" and args.checkpoint is None:
+        args.checkpoint = str(TUNED_CHECKPOINT)
+    RESULTS_DIR = Path(args.output_dir).resolve() if args.output_dir else ROOT / "results"
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     test_size = 10000
     if args.quick:
         args.rounds, args.data_fraction, test_size = 2, 0.04, 1000

@@ -3,32 +3,33 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.utils.prune as prune
 import torchvision
-import torchvision.transforms as transforms
 import json
 import os
 from pathlib import Path
 
 os.chdir(Path(__file__).resolve().parent)
-from baseline_cifar10 import CNN
+from baseline_cifar10 import CIFAR10_WIDTHS, cifar10_transform, tuned_split_indices
+from prune_tuned import compact_uniform
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 DEVICE = torch.device("cpu")
 
 os.makedirs("models", exist_ok=True)
 os.makedirs("results", exist_ok=True)
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,) * 3, (0.3081,) * 3)
-])
+transform = cifar10_transform()
 
 train_dataset = torchvision.datasets.CIFAR10(
-    root="data", train=True, download=True, transform=transform
+    root="data", train=True, download=True, transform=cifar10_transform(train=True)
 )
 test_dataset = torchvision.datasets.CIFAR10(
     root="data", train=False, download=True, transform=transform
 )
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
+train_indices, _ = tuned_split_indices(len(train_dataset))
+train_loader = torch.utils.data.DataLoader(
+    torch.utils.data.Subset(train_dataset, train_indices), batch_size=64, shuffle=True,
+)
 test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=64, shuffle=False)
 
 def evaluate(model, loader, criterion, device):
@@ -64,14 +65,8 @@ def count_zero_weights(model):
 def apply_unstructured_pruning(model, amount=0.3):
     for name, module in model.named_modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            prune.l1_unstructured(module, name="weight", amount=amount)
-    return model
-
-
-def apply_structured_pruning(model, amount=0.3):
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Conv2d):
-            prune.ln_structured(module, name="weight", amount=amount, n=1, dim=0)
+            scores = module.weight.detach().contiguous()
+            prune.l1_unstructured(module, name="weight", amount=amount, importance_scores=scores)
     return model
 
 
@@ -111,28 +106,19 @@ def fine_tune(model, train_loader, criterion, device, epochs=2, lr=0.0005):
 
 criterion = nn.CrossEntropyLoss()
 
-if not os.path.exists("models/baseline_model.pt"):
-    print("Error: baseline_model.pt not found. Run baseline_cifar10.py first.")
-    exit()
-
 def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
     print(f"\n{'='*50}")
     print(f"Pruning type : {pruning_type}  |  amount : {amount}")
     print(f"{'='*50}")
 
-    model = CNN(in_channels=3, num_classes=10)
-    model.load_state_dict(
-        torch.load("models/baseline_model.pt", map_location=DEVICE)
-    )
-    model.to(DEVICE)
-
+    model = load_tuned_model(device=DEVICE)
     total_params = sum(p.numel() for p in model.parameters())
-
+    widths = CIFAR10_WIDTHS
 
     if pruning_type == "unstructured":
         model = apply_unstructured_pruning(model, amount=amount)
     elif pruning_type == "structured":
-        model = apply_structured_pruning(model, amount=amount)
+        model, widths = compact_uniform(model, amount=amount)
 
     loss_before, acc_before = evaluate(model, test_loader, criterion, DEVICE)
     print(f"Accuracy before fine-tune : {acc_before:.2f}%")
@@ -151,10 +137,14 @@ def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
 
     tag = f"{pruning_type}_p{int(amount*100)}"
     model_path = f"models/pruned_{tag}.pt"
-    torch.save(model.state_dict(), model_path)
+    state = model.state_dict()
+    if pruning_type == "structured":
+        state = {"widths": list(widths), "format": "fp32", "state_dict": state}
+    torch.save(state, model_path)
     model_size_mb = os.path.getsize(model_path) / (1024 * 1024)
 
     results = {
+        "source_checkpoint": TUNED_CHECKPOINT.name,
         "model_name": f"Pruned CNN ({pruning_type}, {int(amount*100)}%)",
         "pruning_type": pruning_type,
         "pruning_amount": amount,
@@ -163,7 +153,9 @@ def run_pruning_experiment(pruning_type, amount, fine_tune_epochs=2):
         "test_accuracy_after_finetune": round(acc_after, 2),
         "test_loss": round(loss_after, 4),
         "model_size_mb": round(model_size_mb, 4),
-        "parameters": total_params,
+        "parameters": sum(p.numel() for p in model.parameters()),
+        "original_parameters": total_params,
+        "widths": list(widths),
         "fine_tune_epochs": fine_tune_epochs,
     }
 

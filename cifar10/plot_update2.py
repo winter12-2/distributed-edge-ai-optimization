@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -6,6 +7,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  
 import numpy as np 
 import pandas as pd  
+if __package__:
+    from .tuned_experiment import TUNED_CHECKPOINT, TUNED_METRICS
+else:
+    from tuned_experiment import TUNED_CHECKPOINT, TUNED_METRICS
 
 ROOT = Path(__file__).resolve().parent
 RESULTS = ROOT / "results"
@@ -49,10 +54,9 @@ def hbar(ax, labels, values, title, fmt):
 
 
 def plot_training_history():
-    path = RESULTS / "results_baseline.json"
+    path = TUNED_METRICS
     if not path.exists():
         return
-    import json
     losses = json.loads(path.read_text()).get("epoch_losses", [])
     if not losses:
         return
@@ -60,7 +64,7 @@ def plot_training_history():
     ax.plot(range(1, len(losses) + 1), losses, color=SERIES[0], lw=2, marker="o", ms=4)
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Average training loss")
-    ax.set_title("CIFAR-10 baseline CNN training loss", loc="left")
+    ax.set_title("Tuned CIFAR-10 CNN training loss", loc="left")
     save(fig, "cifar10_training_loss.png")
 
 
@@ -68,6 +72,12 @@ def plot_federated():
     summary_path = RESULTS / SUMMARY_FILE
     if not summary_path.exists():
         print(f"skip: results/{SUMMARY_FILE} not found")
+        return
+    settings_path = summary_path.with_name(SUMMARY_FILE.replace("_summary.csv", "_settings.json"))
+    settings = json.loads(settings_path.read_text(encoding="utf-8")) if settings_path.is_file() else {}
+    checkpoint = settings.get("args", {}).get("checkpoint") or ""
+    if Path(checkpoint).name != TUNED_CHECKPOINT.name:
+        print(f"skip: {SUMMARY_FILE} has no tuned-checkpoint run")
         return
     summary = pd.read_csv(summary_path)
     tags = summary["experiment"].tolist()
@@ -78,7 +88,13 @@ def plot_federated():
             continue
         r = pd.read_csv(f)
         color = SERIES[i % len(SERIES)]
-        ax.plot(r["round"], r["test_accuracy"] * 100, color=color, lw=2, marker="o", ms=4, label=tag)
+        row = summary.loc[summary["experiment"] == tag].iloc[0]
+        rounds = r["round"].tolist()
+        accuracy = (r["test_accuracy"] * 100).tolist()
+        if pd.notna(row.get("initial_test_accuracy")):
+            rounds.insert(0, 0)
+            accuracy.insert(0, row["initial_test_accuracy"] * 100)
+        ax.plot(rounds, accuracy, color=color, lw=2, marker="o", ms=4, label=tag)
     ax.set_xlabel("Federated round")
     ax.set_ylabel("Global test accuracy (%)")
     title = ("CIFAR-10 federated (improved CNN): FedAvg vs FedProx vs client selection" if UPDATE3

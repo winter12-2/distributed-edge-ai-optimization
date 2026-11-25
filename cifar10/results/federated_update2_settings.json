@@ -16,6 +16,8 @@
     "target_acc": 0.45,
     "data_fraction": 0.1,
     "seed": 42,
+    "checkpoint": "C:\\Users\\redst\\Downloads\\distributed-edge-ai-optimization\\cifar10\\models\\baseline_tuned_model.pt",
+    "output_dir": null,
     "quick": false
   },
   "tiers": {

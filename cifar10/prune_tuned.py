@@ -24,11 +24,13 @@ if __package__:
         CIFAR10_WIDTHS, ROOT, VALIDATION_SPLIT_SEED, CIFAR10CNN, check_accuracy,
         cifar10_transform, tuned_split_indices,
     )
+    from .tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 else:
     from baseline_cifar10 import (
         CIFAR10_WIDTHS, ROOT, VALIDATION_SPLIT_SEED, CIFAR10CNN, check_accuracy,
         cifar10_transform, tuned_split_indices,
     )
+    from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 
 # Indices of Conv2d modules within CIFAR10CNN.features. BN and ReLU follow each.
@@ -65,6 +67,12 @@ def channel_ranking(model, method):
 
 def retained_channels(ranking, widths):
     return [order[:width].sort().values for order, width in zip(ranking, widths)]
+
+
+def compact_uniform(model, amount):
+    widths = tuple(max(MIN_CHANNELS, width - round(width * amount)) for width in CIFAR10_WIDTHS)
+    retained = retained_channels(channel_ranking(model, "gamma"), widths)
+    return compact_model(model, retained), widths
 
 
 @torch.no_grad()
@@ -330,6 +338,16 @@ def make_loaders():
     )
 
 
+def evaluate_int8(model, widths, path, examples, test_loader, fp32_accuracy):
+    quantized = torch.ao.quantization.quantize_dynamic(model, {nn.Linear}, dtype=torch.qint8)
+    quantized, artifact = export(quantized, widths, path, examples, encoding="dynamic_int8")
+    accuracy = check_accuracy(test_loader, quantized, "cpu")
+    return {
+        "artifact": artifact, "test_accuracy": accuracy,
+        "test_delta_vs_fp32": accuracy - fp32_accuracy, "latency": cpu_latency(quantized, examples),
+    }
+
+
 def write_json(path, data):
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -386,7 +404,7 @@ def compare_seeds(paths):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--checkpoint", type=Path, default=ROOT / "models" / "baseline_tuned_model.pt")
+    parser.add_argument("--checkpoint", type=Path, default=TUNED_CHECKPOINT)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--epochs", type=int, default=20, help="Extra training epochs per experiment.")
     parser.add_argument("--targets", type=float, nargs="+", default=[0.25, 0.50])
@@ -431,8 +449,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     artifacts.mkdir(parents=True, exist_ok=True)
     checkpoint_hash = hashlib.sha256(args.checkpoint.read_bytes()).hexdigest()
-    model = CIFAR10CNN().to(device=device, memory_format=torch.channels_last)
-    model.load_state_dict(torch.load(args.checkpoint, map_location=device, weights_only=True))
+    model = load_tuned_model(args.checkpoint, device=device)
     train_loader, validation_loader, test_loader = make_loaders()
     examples = next(iter(validation_loader))[0][:8]
     baseline_accuracy = check_accuracy(validation_loader, model, device)
@@ -486,6 +503,10 @@ def main():
         },
         "structured": [], "unstructured": [],
     }
+    report["quantization_only"] = evaluate_int8(
+        source, CIFAR10_WIDTHS, artifacts / "source_int8.pt", examples, test_loader,
+        report["baseline"]["test_accuracy"],
+    )
     dense = deepcopy(model)
     dense_result = recover(dense, train_loader, validation_loader, device, args.seed, args.epochs, "dense")
     dense, dense_file = export(dense, CIFAR10_WIDTHS, artifacts / "dense.pt", examples)
@@ -531,19 +552,13 @@ def main():
         winner = max(results, key=lambda name: results[name]["validation_accuracy"])
         best = load_artifact(artifacts / results[winner]["artifact"]["file"])
         best_test = check_accuracy(test_loader, best, "cpu")
-        quantized = torch.ao.quantization.quantize_dynamic(best, {nn.Linear}, dtype=torch.qint8)
-        quantized, quantized_file = export(
-            quantized, widths, artifacts / f"{tag}_int8.pt", examples, encoding="dynamic_int8",
-        )
-        quantized_test = check_accuracy(test_loader, quantized, "cpu")
         report["structured"].append({
             **selection, "variants": results, "winner": winner,
             "test_accuracy": best_test, "test_delta_vs_dense": best_test - report["dense_control"]["test_accuracy"],
             "latency": cpu_latency(best, examples),
-            "dynamic_int8": {
-                "artifact": quantized_file, "test_accuracy": quantized_test,
-                "test_delta_vs_fp32": quantized_test - best_test, "latency": cpu_latency(quantized, examples),
-            },
+            "dynamic_int8": evaluate_int8(
+                best, widths, artifacts / f"{tag}_int8.pt", examples, test_loader, best_test,
+            ),
         })
         write_json(output / "report.json", report)
 
@@ -564,12 +579,16 @@ def main():
         tag = f"unstructured{amount:.4g}"
         restored, dense_export = export(working, CIFAR10_WIDTHS, artifacts / f"{tag}.pt", examples)
         _, csr_export = export(working, CIFAR10_WIDTHS, artifacts / f"{tag}_csr.pt", examples, encoding="csr")
+        test_accuracy = check_accuracy(test_loader, restored, "cpu")
         report["unstructured"].append({
             **recovery, "amount": amount, "weight_sparsity": zero_weights / weight_count,
             "immediate_validation_accuracy": immediate, "dense_artifact": dense_export,
             "storage_only_sparse_artifact": csr_export, **model_cost(CIFAR10_WIDTHS),
-            "test_accuracy": check_accuracy(test_loader, restored, "cpu"),
+            "test_accuracy": test_accuracy,
             "latency_after_dense_reload": cpu_latency(restored, examples),
+            "dynamic_int8": evaluate_int8(
+                restored, CIFAR10_WIDTHS, artifacts / f"{tag}_int8.pt", examples, test_loader, test_accuracy,
+            ),
         })
         write_json(output / "report.json", report)
     print(f"Report: {output / 'report.json'}", flush=True)

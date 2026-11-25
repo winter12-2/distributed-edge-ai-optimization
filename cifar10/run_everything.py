@@ -1,36 +1,48 @@
-"""Run the original experiment sequence on CIFAR-10."""
+"""Run the CIFAR-10 experiments from the saved tuned baseline."""
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import sys
 
+if __package__:
+    from .tuned_experiment import ROOT, TUNED_CHECKPOINT, TUNED_METRICS
+else:
+    from tuned_experiment import ROOT, TUNED_CHECKPOINT, TUNED_METRICS
 
-ROOT = Path(__file__).resolve().parent
-SCRIPTS = [
-    "baseline_cifar10.py",
-    "optimized_quantized.py",
-    "optimized_pruned.py",
-    "optimized_combined.py",
-    "federated_simulation.py",
-    "analyze_results.py",
+EXPERIMENTS = [
+    ["optimized_quantized.py"],
+    ["optimized_pruned.py"],
+    ["optimized_combined.py"],
+    ["prune_tuned.py", "--epochs", "2", "--unstructured", "0.30", "0.60", "--run-tag", "tuned_suite"],
+    ["federated_simulation.py"],
+    ["federated_noniid.py", "--preset", "all", "--data-fraction", "0.1", "--rounds", "10"],
+    ["federated_update3.py"],
+    ["analyze_results.py"],
+    ["plot_update2.py"],
+    ["plot_update2.py", "--update3"],
 ]
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--skip-baseline", action="store_true",
-                        help="Reuse the previously trained CIFAR-10 baseline.")
+    baseline = parser.add_mutually_exclusive_group()
+    baseline.add_argument("--skip-baseline", action="store_true",
+                          help="Reuse the previously trained tuned baseline (default).")
+    baseline.add_argument("--train-baseline", action="store_true",
+                          help="Retrain the tuned baseline before running the experiments.")
     args = parser.parse_args()
-    if args.skip_baseline:
-        for name in ["models/baseline_model.pt", "results/results_baseline.json"]:
-            if not (ROOT / name).is_file():
-                parser.error(f"Missing baseline artifact: {ROOT / name}")
-    for script in SCRIPTS[1:] if args.skip_baseline else SCRIPTS:
-        print(f"\nRunning {script}", flush=True)
-        environment = dict(os.environ, PYTHONIOENCODING="utf-8")
-        subprocess.run([sys.executable, "-u", str(ROOT / script)], cwd=ROOT,
+    if not args.train_baseline:
+        for artifact in (TUNED_CHECKPOINT, TUNED_METRICS):
+            if not artifact.is_file():
+                parser.error(f"Missing tuned baseline artifact: {artifact}. Use --train-baseline to create it.")
+    commands = EXPERIMENTS
+    if args.train_baseline:
+        commands = [["baseline_cifar10.py", "--tuned", "--seed", "42"], *commands]
+    environment = dict(os.environ, PYTHONIOENCODING="utf-8", MPLBACKEND="Agg")
+    for script, *options in commands:
+        print(f"\nRunning {' '.join([script, *options])}", flush=True)
+        subprocess.run([sys.executable, "-u", str(ROOT / script), *options], cwd=ROOT,
                        env=environment, check=True)
     print("\nCIFAR-10 experiments completed.", flush=True)
 

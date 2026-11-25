@@ -9,9 +9,10 @@ import torch
 import torch.nn as nn
 import torch.nn.utils.prune as prune
 import torchvision
-import torchvision.transforms as transforms
 
-from baseline_cifar10 import CNN
+from baseline_cifar10 import CIFAR10_WIDTHS, cifar10_transform, tuned_split_indices
+from prune_tuned import compact_uniform
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 DEVICE = torch.device("cpu")
 
@@ -24,19 +25,19 @@ BATCH_SIZE       = 64
 os.makedirs("models",  exist_ok=True)
 os.makedirs("results", exist_ok=True)
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,) * 3, (0.3081,) * 3)
-])
+transform = cifar10_transform()
 
 train_dataset = torchvision.datasets.CIFAR10(
-    root="data", train=True, download=True, transform=transform
+    root="data", train=True, download=True, transform=cifar10_transform(train=True)
 )
 test_dataset = torchvision.datasets.CIFAR10(
     root="data", train=False, download=True, transform=transform
 )
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+train_indices, _ = tuned_split_indices(len(train_dataset))
+train_loader = torch.utils.data.DataLoader(
+    torch.utils.data.Subset(train_dataset, train_indices), batch_size=BATCH_SIZE, shuffle=True,
+)
 test_loader  = torch.utils.data.DataLoader(test_dataset,  batch_size=BATCH_SIZE, shuffle=False)
 
 criterion = nn.CrossEntropyLoss()
@@ -80,14 +81,8 @@ def count_zero_weights(model):
 def apply_unstructured_pruning(model, amount):
     for module in model.modules():
         if isinstance(module, (nn.Conv2d, nn.Linear)):
-            prune.l1_unstructured(module, name="weight", amount=amount)
-    return model
-
-
-def apply_structured_pruning(model, amount):
-    for module in model.modules():
-        if isinstance(module, nn.Conv2d):
-            prune.ln_structured(module, name="weight", amount=amount, n=1, dim=0)
+            scores = module.weight.detach().contiguous()
+            prune.l1_unstructured(module, name="weight", amount=amount, importance_scores=scores)
     return model
 
 
@@ -122,27 +117,20 @@ def fine_tune(model, loader, criterion, device, epochs, lr):
 
 if __name__ == "__main__":
 
-    if not os.path.exists("models/baseline_model.pt"):
-        print("Error: baseline_model.pt not found. Run baseline_cifar10.py first.")
-        exit()
-
-    baseline_model = CNN(in_channels=3, num_classes=10)
-    baseline_model.load_state_dict(torch.load("models/baseline_model.pt", map_location=DEVICE))
-    baseline_model.to(DEVICE)
+    baseline_model = load_tuned_model(device=DEVICE)
 
     total_params = sum(p.numel() for p in baseline_model.parameters())
 
     bl_loss, bl_acc, bl_ms = evaluate(baseline_model, test_loader, criterion, DEVICE)
     print(f"Baseline accuracy: {bl_acc:.2f}%")
 
-    pruned_model = CNN(in_channels=3, num_classes=10)
-    pruned_model.load_state_dict(torch.load("models/baseline_model.pt", map_location=DEVICE))
-    pruned_model.to(DEVICE)
+    pruned_model = load_tuned_model(device=DEVICE)
+    widths = CIFAR10_WIDTHS
 
     if PRUNING_TYPE == "unstructured":
         pruned_model = apply_unstructured_pruning(pruned_model, PRUNING_AMOUNT)
     elif PRUNING_TYPE == "structured":
-        pruned_model = apply_structured_pruning(pruned_model, PRUNING_AMOUNT)
+        pruned_model, widths = compact_uniform(pruned_model, PRUNING_AMOUNT)
 
     _, acc_before_ft, _ = evaluate(pruned_model, test_loader, criterion, DEVICE)
     print(f"Accuracy before fine-tune: {acc_before_ft:.2f}%")
@@ -160,7 +148,10 @@ if __name__ == "__main__":
     print(f"Pruned accuracy: {pr_acc:.2f}%")
 
     pruned_path = "models/combined_pruned_only.pt"
-    torch.save(pruned_model.state_dict(), pruned_path)
+    pruned_state = pruned_model.state_dict()
+    if PRUNING_TYPE == "structured":
+        pruned_state = {"widths": list(widths), "format": "fp32", "state_dict": pruned_state}
+    torch.save(pruned_state, pruned_path)
     pruned_size_mb = os.path.getsize(pruned_path) / (1024 * 1024)
 
     combined_model = torch.quantization.quantize_dynamic(pruned_model, {nn.Linear}, dtype=torch.qint8)
@@ -169,7 +160,10 @@ if __name__ == "__main__":
     print(f"Combined accuracy: {cb_acc:.2f}%")
 
     combined_path = "models/combined_model.pt"
-    torch.save(combined_model.state_dict(), combined_path)
+    combined_state = combined_model.state_dict()
+    if PRUNING_TYPE == "structured":
+        combined_state = {"widths": list(widths), "format": "dynamic_int8", "state_dict": combined_state}
+    torch.save(combined_state, combined_path)
     combined_size_mb = os.path.getsize(combined_path) / (1024 * 1024)
 
     print("\n===== COMBINED MODEL SUMMARY =====")
@@ -180,6 +174,7 @@ if __name__ == "__main__":
     print(f"{'Pruned + Quantized':<22} {cb_acc:>9.2f}%  {combined_size_mb:>10.4f}  {cb_ms:>10.3f}")
 
     results = {
+        "source_checkpoint": TUNED_CHECKPOINT.name,
         "model_name": "Combined Pruned + Quantized CNN",
         "pruning_type": PRUNING_TYPE,
         "pruning_amount": PRUNING_AMOUNT,

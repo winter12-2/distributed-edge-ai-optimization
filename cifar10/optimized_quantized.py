@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-import torchvision.transforms as transforms
 import json
 import os
 from pathlib import Path
 
 os.chdir(Path(__file__).resolve().parent)
-from baseline_cifar10 import CNN
+from baseline_cifar10 import cifar10_transform
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 # using cpu for quantization
 DEVICE = torch.device("cpu")
@@ -17,10 +17,7 @@ DEVICE = torch.device("cpu")
 os.makedirs("models", exist_ok=True)
 os.makedirs("results", exist_ok=True)
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,) * 3, (0.3081,) * 3)
-])
+transform = cifar10_transform()
 
 test_dataset = torchvision.datasets.CIFAR10(
     root="data",
@@ -62,18 +59,7 @@ def evaluate(model, test_loader, criterion, device):
     return avg_loss, accuracy
 
 
-# create baseline model structure
-model = CNN(in_channels=3, num_classes=10)
-
-# check if baseline model exists
-if not os.path.exists("models/baseline_model.pt"):
-    print("Error: baseline_model.pt not found. Run baseline_cifar10.py first.")
-    exit()
-
-# load trained baseline weights
-model.load_state_dict(torch.load("models/baseline_model.pt", map_location=DEVICE))
-model.to(DEVICE)
-model.eval()
+model = load_tuned_model(device=DEVICE).eval()
 
 print("Baseline model loaded successfully.")
 
@@ -105,6 +91,7 @@ model_size_mb = os.path.getsize(quantized_model_path) / (1024 * 1024)
 
 # save results
 results = {
+    "source_checkpoint": TUNED_CHECKPOINT.name,
     "model_name": "Quantized Optimized CIFAR-10 CNN",
     "quantization_type": "PyTorch dynamic int8 quantization",
     "test_accuracy": round(test_acc, 2),

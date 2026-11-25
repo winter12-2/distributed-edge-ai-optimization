@@ -1,6 +1,8 @@
 {
   "args": {
     "model": "improved",
+    "checkpoint": "C:\\Users\\redst\\Downloads\\distributed-edge-ai-optimization\\cifar10\\models\\baseline_tuned_model.pt",
+    "output_dir": null,
     "only": null,
     "alpha": 0.5,
     "mu": 0.01,

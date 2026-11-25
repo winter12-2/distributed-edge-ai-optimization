@@ -1,3 +1,4 @@
+import argparse
 import os
 import sys
 from pathlib import Path
@@ -5,12 +6,11 @@ from pathlib import Path
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
+INVOCATION_DIR = Path.cwd()
 os.chdir(Path(__file__).resolve().parent)
 import copy
 import json
 import torch
-import torchvision
-import torchvision.transforms as transforms
 
 from torch import nn, optim
 from torch.utils.data import DataLoader, random_split
@@ -18,7 +18,8 @@ from torch.utils.data import DataLoader, random_split
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from baseline_cifar10 import CNN
+from federated_noniid import get_datasets
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
 
 os.makedirs("results", exist_ok=True)
 
@@ -31,17 +32,23 @@ BATCH_SIZE    = 64
 LEARNING_RATE = 0.001
 PRUNING_AMOUNT = 0.3          # fraction of weights zeroed in combined mode
 
-transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,) * 3, (0.3081,) * 3)
-])
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run the CIFAR-10 FedAvg communication modes.")
+    parser.add_argument("--checkpoint", type=Path, default=TUNED_CHECKPOINT)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--rounds", type=int, default=ROUNDS)
+    args = parser.parse_args()
+    if args.rounds < 1:
+        parser.error("--rounds must be at least 1")
+    return args
 
-train_dataset = torchvision.datasets.CIFAR10(
-    root="./data", train=True,  download=True, transform=transform
-)
-test_dataset = torchvision.datasets.CIFAR10(
-    root="./data", train=False, download=True, transform=transform
-)
+
+if __name__ == "__main__":
+    args = parse_args()
+    ROUNDS = args.rounds
+    torch.manual_seed(args.seed)
+train_dataset, test_dataset = get_datasets()
 
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
 
@@ -75,6 +82,8 @@ def train_local(model, loader):
 def average_weights(local_weights):
     avg = copy.deepcopy(local_weights[0])
     for key in avg.keys():
+        if not avg[key].is_floating_point():
+            continue
         for i in range(1, len(local_weights)):
             avg[key] += local_weights[i][key]
         avg[key] = avg[key] / len(local_weights)
@@ -85,9 +94,12 @@ def quantize_weights(state_dict):
     """Convert float32 state dict → int8 (q, scale) pairs."""
     quantized = {}
     for key, tensor in state_dict.items():
+        if not tensor.is_floating_point():
+            quantized[key] = (tensor, None)
+            continue
         t = tensor.float()
         scale = t.abs().max() / 127.0
-        scale = scale if scale > 0 else torch.tensor(1.0)
+        scale = scale if scale > 0 else t.new_tensor(1.0)
         q = torch.clamp(torch.round(t / scale), -128, 127).to(torch.int8)
         quantized[key] = (q, scale)
     return quantized
@@ -96,7 +108,7 @@ def quantize_weights(state_dict):
 def dequantize_weights(quantized):
     state_dict = {}
     for key, (q, scale) in quantized.items():
-        state_dict[key] = q.float() * scale
+        state_dict[key] = q if scale is None else q.float() * scale
     return state_dict
 
 
@@ -108,8 +120,8 @@ def prune_state_dict(state_dict, amount=PRUNING_AMOUNT):
     """
     pruned = {}
     for key, tensor in state_dict.items():
-        t = tensor.float()
-        if "weight" in key and t.numel() > 1:
+        t = tensor
+        if "weight" in key and t.ndim > 1 and t.numel() > 1:
             threshold = torch.quantile(t.abs().flatten(), amount)
             mask = (t.abs() >= threshold).float()
             pruned[key] = t * mask
@@ -170,14 +182,16 @@ def effective_bytes_per_param(sparsity, bytes_per_param):
     return bytes_per_param * (1.0 - sparsity)
 
 
-def rounds_to_target(accuracy_log, target_pct):
+def rounds_to_target(accuracy_log, target_pct, initial_accuracy=None):
+    if initial_accuracy is not None and initial_accuracy >= target_pct:
+        return 0
     for rnd, acc in enumerate(accuracy_log, start=1):
         if acc >= target_pct:
             return rnd
     return None
 
 
-def run_fedavg(global_model, mode="float32"):
+def run_fedavg(global_model, mode="float32", seed=None):
     """
     mode options
     ------------
@@ -187,6 +201,8 @@ def run_fedavg(global_model, mode="float32"):
                effective bytes per param ≈ 1 × (1 - sparsity)
     """
     assert mode in ("float32", "int8", "combined"), f"Unknown mode: {mode}"
+    if seed is not None:
+        torch.manual_seed(seed)
 
     model        = copy.deepcopy(global_model)
     accuracy_log = []
@@ -266,44 +282,43 @@ def run_fedavg(global_model, mode="float32"):
 
 if __name__ == "__main__":
 
-    baseline_acc = None
-    if os.path.exists("results/results_baseline.json"):
-        with open("results/results_baseline.json") as f:
-            baseline_acc = json.load(f)["test_accuracy"]
+    output_dir = INVOCATION_DIR / args.output_dir if args.output_dir else Path("results")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint = INVOCATION_DIR / args.checkpoint
+    reference_model = load_tuned_model(checkpoint, device=device)
+    baseline_acc = evaluate(reference_model)
+    print(f"Initial tuned checkpoint accuracy: {baseline_acc:.2f}%")
 
-    parameter_count = model_parameter_count(CNN(in_channels=3, num_classes=10))
+    parameter_count = model_parameter_count(reference_model)
     print("\n" + "=" * 55)
     print("FedAvg — float32 communication")
     print("=" * 55)
 
-    global_model_f32 = CNN(in_channels=3, num_classes=10).to(device)
     acc_log_f32, results_f32, cost_round_f32, total_cost_f32, sparsity_f32 = run_fedavg(
-        global_model_f32, mode="float32"
+        reference_model, mode="float32", seed=args.seed
     )
     print("\n" + "=" * 55)
     print("FedAvg — int8 quantized communication")
     print("=" * 55)
 
-    global_model_i8 = CNN(in_channels=3, num_classes=10).to(device)
     acc_log_i8, results_i8, cost_round_i8, total_cost_i8, sparsity_i8 = run_fedavg(
-        global_model_i8, mode="int8"
+        reference_model, mode="int8", seed=args.seed
     )
 
     print("\n" + "=" * 55)
     print(f"FedAvg — combined (pruned {int(PRUNING_AMOUNT*100)}% + int8 quantized)")
     print("=" * 55)
-    global_model_cb = CNN(in_channels=3, num_classes=10).to(device)
     acc_log_cb, results_cb, cost_round_cb, total_cost_cb, sparsity_cb = run_fedavg(
-        global_model_cb, mode="combined"
+        reference_model, mode="combined", seed=args.seed
     )
 
-    rounds_95_f32_self = rounds_to_target(acc_log_f32, 0.95 * acc_log_f32[-1])
-    rounds_95_i8_self  = rounds_to_target(acc_log_i8,  0.95 * acc_log_i8[-1])
-    rounds_95_cb_self  = rounds_to_target(acc_log_cb,  0.95 * acc_log_cb[-1])
+    rounds_95_f32_self = rounds_to_target(acc_log_f32, 0.95 * acc_log_f32[-1], baseline_acc)
+    rounds_95_i8_self  = rounds_to_target(acc_log_i8,  0.95 * acc_log_i8[-1], baseline_acc)
+    rounds_95_cb_self  = rounds_to_target(acc_log_cb,  0.95 * acc_log_cb[-1], baseline_acc)
 
-    rounds_95_f32_bl = rounds_to_target(acc_log_f32, 0.95 * baseline_acc) if baseline_acc else None
-    rounds_95_i8_bl  = rounds_to_target(acc_log_i8,  0.95 * baseline_acc) if baseline_acc else None
-    rounds_95_cb_bl  = rounds_to_target(acc_log_cb,  0.95 * baseline_acc) if baseline_acc else None
+    rounds_95_f32_bl = rounds_to_target(acc_log_f32, 0.95 * baseline_acc, baseline_acc)
+    rounds_95_i8_bl  = rounds_to_target(acc_log_i8,  0.95 * baseline_acc, baseline_acc)
+    rounds_95_cb_bl  = rounds_to_target(acc_log_cb,  0.95 * baseline_acc, baseline_acc)
 
     print(f"\nRounds to 95% of own final accuracy  — f32: {rounds_95_f32_self}  |  int8: {rounds_95_i8_self}  |  combined: {rounds_95_cb_self}")
     print(f"Rounds to 95% of baseline accuracy   — f32: {rounds_95_f32_bl}  |  int8: {rounds_95_i8_bl}  |  combined: {rounds_95_cb_bl}")
@@ -312,9 +327,9 @@ if __name__ == "__main__":
     df_i8  = pd.DataFrame(results_i8)
     df_cb  = pd.DataFrame(results_cb)
 
-    df_f32.to_csv("results/federated_results_f32.csv",      index=False)
-    df_i8.to_csv("results/federated_results_i8.csv",        index=False)
-    df_cb.to_csv("results/federated_results_combined.csv",  index=False)
+    df_f32.to_csv(output_dir / "federated_results_f32.csv", index=False)
+    df_i8.to_csv(output_dir / "federated_results_i8.csv", index=False)
+    df_cb.to_csv(output_dir / "federated_results_combined.csv", index=False)
 
     df_combined = pd.DataFrame({
         "round":                  df_f32["round"],
@@ -326,9 +341,12 @@ if __name__ == "__main__":
         "cumulative_cost_combined": df_cb["cumulative_cost"],
         "sparsity_combined_pct":  df_cb["sparsity_pct"],
     })
-    df_combined.to_csv("results/federated_results.csv", index=False)
+    df_combined.to_csv(output_dir / "federated_results.csv", index=False)
 
     summary = {
+        "source_checkpoint": checkpoint.name,
+        "initial_test_accuracy": baseline_acc,
+        "seed": args.seed,
         "num_clients":    NUM_CLIENTS,
         "rounds":         ROUNDS,
         "local_epochs":   LOCAL_EPOCHS,
@@ -363,7 +381,7 @@ if __name__ == "__main__":
         },
     }
 
-    with open("results/federated_results.json", "w") as f:
+    with open(output_dir / "federated_results.json", "w") as f:
         json.dump(summary, f, indent=4)
 
     rounds_axis = df_combined["round"]
@@ -380,7 +398,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("results/federated_accuracy.png", dpi=150)
+    plt.savefig(output_dir / "federated_accuracy.png", dpi=150)
     plt.close()
 
     plt.figure(figsize=(8, 5))
@@ -393,7 +411,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("results/federated_communication_cost.png", dpi=150)
+    plt.savefig(output_dir / "federated_communication_cost.png", dpi=150)
     plt.close()
 
     plt.figure(figsize=(8, 5))
@@ -406,7 +424,7 @@ if __name__ == "__main__":
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
-    plt.savefig("results/federated_efficiency_frontier.png", dpi=150)
+    plt.savefig(output_dir / "federated_efficiency_frontier.png", dpi=150)
     plt.close()
 
     print("\n\n===== FEDERATED LEARNING SUMMARY =====")
@@ -421,8 +439,4 @@ if __name__ == "__main__":
 
     print("\nTraining complete.")
     print(df_combined.to_string(index=False))
-    print("\nSaved results to results/federated_results.csv")
-    print("Saved summary to results/federated_results.json")
-    print("Saved plots   to results/federated_accuracy.png,")
-    print("                 results/federated_communication_cost.png,")
-    print("                 results/federated_efficiency_frontier.png")
+    print(f"\nSaved federated metrics and plots to {output_dir}")

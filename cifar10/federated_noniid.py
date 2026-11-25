@@ -2,6 +2,7 @@ import argparse
 import copy
 import json
 import os
+from pathlib import Path
 import time
  
 import numpy as np
@@ -12,7 +13,8 @@ from torch.utils.data import DataLoader, Subset
  
 from torchvision import datasets, transforms
 
-from baseline_cifar10 import CNN, ROOT
+from baseline_cifar10 import ROOT, cifar10_transform
+from tuned_experiment import TUNED_CHECKPOINT, load_tuned_model
  
 RESULTS_DIR = ROOT / "results"
 DATA_DIR = ROOT / "data"
@@ -26,8 +28,10 @@ def set_seed(seed):
     torch.manual_seed(seed)
  
  
-def get_datasets():
-    tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(NORM_MEAN, NORM_STD)])
+def get_datasets(model_name="improved"):
+    tf = cifar10_transform()
+    if model_name == "original":
+        tf = transforms.Compose([transforms.ToTensor(), transforms.Normalize(NORM_MEAN, NORM_STD)])
     train = datasets.CIFAR10(DATA_DIR, train=True, download=True, transform=tf)
     test = datasets.CIFAR10(DATA_DIR, train=False, download=True, transform=tf)
     return train, test
@@ -192,7 +196,9 @@ def run_experiment(cfg, args, train_set, test_loader, labels):
             p["threads"] = min(p["threads"], max_threads)
             profiles.append(p)
  
-    global_model = CNN()
+    global_model = load_tuned_model(Path(args.checkpoint))
+    _, initial_accuracy = evaluate(global_model, test_loader)
+    print(f"  Initial tuned checkpoint accuracy: {initial_accuracy:.4f}")
     param_bytes = sum(p.numel() * 4 for p in global_model.parameters())
     act_bytes = activation_bytes_per_image(global_model)
     download_bytes = state_bytes(global_model.state_dict(), "none")
@@ -284,14 +290,18 @@ def run_experiment(cfg, args, train_set, test_loader, labels):
     clients_df.to_csv(RESULTS_DIR / f"federated_{tag}_clients.csv", index=False)
  
     reach = rounds_df[rounds_df["test_accuracy"] >= args.target_acc]["round"]
+    rounds_to_target = int(reach.iloc[0]) if len(reach) else None
+    if initial_accuracy >= args.target_acc:
+        rounds_to_target = 0
     return {
         "experiment": tag,
         "partition": cfg["partition"] if cfg["alpha"] is None else f"dirichlet(alpha={cfg['alpha']})",
         "heterogeneous": cfg["hetero"],
         "compression": cfg["compress"],
+        "initial_test_accuracy": initial_accuracy,
         "final_accuracy": rounds_df["test_accuracy"].iloc[-1],
         "best_accuracy": rounds_df["test_accuracy"].max(),
-        f"rounds_to_{int(args.target_acc * 100)}pct": int(reach.iloc[0]) if len(reach) else None,
+        f"rounds_to_{int(args.target_acc * 100)}pct": rounds_to_target,
         "mean_round_time_s": round(rounds_df["round_time_s"].mean(), 2),
         "total_time_s": round(rounds_df["round_time_s"].sum(), 1),
         "mean_completion_rate": round(rounds_df["completion_rate"].mean(), 3),
@@ -324,13 +334,17 @@ def parse_args():
     p.add_argument("--data-fraction", type=float, default=1.0,
                    help="use part of the training set to make runs faster (e.g. 0.3)")
     p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--checkpoint", default=str(TUNED_CHECKPOINT), help="Tuned checkpoint for every preset.")
+    p.add_argument("--output-dir", help="Directory for this run's metrics.")
     p.add_argument("--quick", action="store_true", help="tiny run to check the code works")
     return p.parse_args()
  
  
 def main():
+    global RESULTS_DIR
     args = parse_args()
-    RESULTS_DIR.mkdir(exist_ok=True)
+    RESULTS_DIR = Path(args.output_dir).resolve() if args.output_dir else ROOT / "results"
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     if args.quick:
         args.rounds, args.data_fraction = 2, 0.04
     train_set, test_set = get_datasets()

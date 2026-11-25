@@ -53,6 +53,9 @@ From the repository root using the existing Windows environment:
 # Tuned CIFAR-10 channel pruning with a two-epoch recovery pilot
 .\venv\Scripts\python.exe cifar10\prune_tuned.py --epochs 2 --unstructured 0.60
 
+# Tuned CIFAR-10 optimization suite
+.\venv\Scripts\python.exe cifar10\prune_tuned.py --epochs 2 --unstructured 0.30 0.60 --run-tag tuned_suite
+
 # Full recovery comparison at the 25% size target
 .\venv\Scripts\python.exe cifar10\prune_tuned.py --epochs 20 --targets 0.25
 
@@ -62,12 +65,11 @@ From the repository root using the existing Windows environment:
 # Original CIFAR-10 baseline
 .\venv\Scripts\python.exe cifar10\baseline_cifar10.py
 
-# CIFAR-10 quantization, four pruning variants, combined compression,
-# three federated modes, and result graphs using the existing baseline
-.\venv\Scripts\python.exe cifar10\run_everything.py --skip-baseline
-
-# Full CIFAR-10 pipeline, including baseline retraining
+# CIFAR-10 compression, federated experiments, and graphs from the saved tuned baseline
 .\venv\Scripts\python.exe cifar10\run_everything.py
+
+# Retrain the tuned baseline before running the CIFAR-10 pipeline
+.\venv\Scripts\python.exe cifar10\run_everything.py --train-baseline
 
 # Regenerate CIFAR-10 analysis graphs from saved results
 .\venv\Scripts\python.exe cifar10\analyze_results.py
@@ -131,6 +133,8 @@ a state dict, and can be restored with `load_artifact(path)`. The optional
 `--unstructured` experiment exports dense and CSR-encoded checkpoints.
 CSR in this experiment saves storage and restores dense tensors for inference.
 Add `--unstructured-only` to run that comparison with the dense control.
+The report also includes classifier INT8 for the source checkpoint and
+for every exported unstructured pruning variant.
 
 For repeat runs, use `--seed`, `--selection`, and `--only` to keep the compact
 architecture and recovery method fixed. Pass a separately trained tuned
@@ -146,36 +150,30 @@ versus 704,533 bytes (28.0% less). Classifier INT8 kept the same test accuracy
 and reduced the file to 484,943 bytes. Median batch-1 CPU latency was
 0.508 ms for the compact FP32 model and 0.669 ms for the INT8 variant.
 
-## CIFAR-10 Algorithm Transfer
+## CIFAR-10 Experiments
 
-The four experiment scripts and three notebooks are copied from `mnist/`.
-Changes are limited to dataset loading, RGB normalization matching the CIFAR-10
-baseline, three input channels, imports, labels, and paths. Compression and
-federated settings are preserved: dynamic int8 quantization of Linear layers;
-30% and 60% structured/unstructured pruning with two fine-tuning epochs at
-0.0005; combined 30% unstructured pruning plus int8; five federated clients,
-ten rounds, one local epoch, batch size 64, and Adam at 0.001.
+The compression and federated programs default to
+`cifar10/models/baseline_tuned_model.pt` and use the tuned RGB normalization.
+Standalone compression runs classifier INT8, 30% and 60% pruning, and
+30% unstructured pruning followed by INT8. Structured pruning removes
+channels ranked by BatchNorm scale and keeps at least 16 channels per layer.
+Fine-tuning reuses the tuned training split and its crop and flip augmentation.
+`prune_tuned.py` also provides matched dense and gradual recovery comparisons.
 
-The runner and compression scripts use the original CNN and checkpoint.
-The runner reuses the saved original baseline with `--skip-baseline`. Federated modes
-start from new random models, as in MNIST, and train separately. Accuracy
-differences are single-run observations, not controlled multi-seed comparisons.
-Pruned models receive two extra fine-tuning epochs, so accuracy gains over the
-baseline do not isolate pruning from the effect of additional training.
-The inherited communication costs are estimates rather than measured network
-traffic; combined costs assume sparse encoding and omit encoding overhead.
+All three federated scripts start from the tuned checkpoint and report test
+accuracy before the first round. Use `--checkpoint` and `--output-dir` to run
+and save a separate experiment. Communication costs are estimates, and the
+combined mode assumes sparse encoding without its storage overhead.
 
-`cifar10/notebooks/results_analysis.ipynb` only analyzes saved JSON/CSV results.
-The other two notebooks retain the older separate dense-model experiments;
-they are not executed by the runner. The TensorFlow notebook requires TensorFlow
-and uses 3072 flattened RGB inputs; TensorFlow is not in the current environment.
-Copied notebooks have their old MNIST outputs cleared to avoid mixing results.
-All CIFAR-10 checkpoints, CSV/JSON results, and figures stay under `cifar10/`.
+The results notebook compares artifacts with tuned-checkpoint provenance.
+The PyTorch edge notebook loads the tuned weights and training history.
+The TFLite notebook requires TensorFlow and exports the tuned weights for
+FP32 and dynamic-range evaluation.
 
 ## CIFAR-10 Non-IID Data and Heterogeneous Clients
 
 `cifar10/federated_noniid.py` extends the federated simulation toward realistic
-edge conditions. It imports the `CNN` class, data folder, and normalization from
+edge conditions. It uses the tuned model, data folder, and normalization from
 `baseline_cifar10.py`, so the model is identical to the baseline. Training uses
 FedAvg with SGD (learning rate 0.03, momentum 0.9), one local epoch, and batch
 size 32, starting from a new random model.
