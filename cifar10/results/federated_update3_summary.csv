@@ -1,7 +1,7 @@
 experiment,model,partition,heterogeneous,fedprox_mu,client_selection,initial_test_accuracy,final_accuracy,best_accuracy,mean_last3_accuracy,mean_round_time_s,mean_completion_rate,total_comm_mb,mean_work_fraction,dropped_ram,dropped_offline,dropped_deadline,skipped_selection,max_est_train_mem_mb
-u3_iid_ideal,improved,iid,False,0.0,False,0.8829,0.8362,0.8362,0.8256,0.39,1.0,132.8,1.0,0,0,0,0,50.74
-u3_noniid_ideal,improved,dirichlet(alpha=0.5),False,0.0,False,0.8829,0.8125,0.8271,0.8203,0.77,1.0,132.8,1.0,0,0,0,0,50.74
-u3_noniid_hetero_fedavg,improved,dirichlet(alpha=0.5),True,0.0,False,0.8829,0.7217,0.7217,0.6257,1.76,0.6,128.15,1.0,0,7,33,0,50.74
-u3_noniid_hetero_fedprox,improved,dirichlet(alpha=0.5),True,0.01,False,0.8829,0.6815,0.6902,0.6747,1.93,0.6,128.15,1.0,0,7,33,0,50.74
-u3_noniid_hetero_selection,improved,dirichlet(alpha=0.5),True,0.0,True,0.8829,0.7233,0.7477,0.7085,1.59,0.75,108.23,0.874,0,5,4,16,50.74
-u3_noniid_hetero_both,improved,dirichlet(alpha=0.5),True,0.01,True,0.8829,0.7912,0.7912,0.7545,1.76,0.75,107.57,0.877,0,6,3,16,50.74
+u3_iid_ideal,improved,iid,False,0.0,False,0.8829,0.8782,0.8827,0.8779,19.96,1.0,132.8,1.0,0,0,0,0,50.74
+u3_noniid_ideal,improved,dirichlet(alpha=0.5),False,0.0,False,0.8829,0.8689,0.874,0.8712,4.56,1.0,132.8,1.0,0,0,0,0,50.74
+u3_noniid_hetero_fedavg,improved,dirichlet(alpha=0.5),True,0.0,False,0.8829,0.8607,0.8629,0.847,3.77,0.66,128.15,1.0,0,7,27,0,50.74
+u3_noniid_hetero_fedprox,improved,dirichlet(alpha=0.5),True,0.01,False,0.8829,0.8601,0.8661,0.8595,3.24,0.68,128.15,1.0,0,7,25,0,50.74
+u3_noniid_hetero_selection,improved,dirichlet(alpha=0.5),True,0.0,True,0.8829,0.8617,0.864,0.8576,3.3,0.71,110.89,0.901,0,7,9,13,50.74
+u3_noniid_hetero_both,improved,dirichlet(alpha=0.5),True,0.01,True,0.8829,0.8575,0.8673,0.8581,3.29,0.76,110.89,0.921,0,3,6,15,50.74

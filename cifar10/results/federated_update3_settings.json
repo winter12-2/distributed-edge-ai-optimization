@@ -1,7 +1,7 @@
 {
   "args": {
     "model": "improved",
-    "checkpoint": "C:\\Users\\redst\\Downloads\\distributed-edge-ai-optimization\\cifar10\\models\\baseline_tuned_model.pt",
+    "checkpoint": "M:\\ccny\\College_Subjects\\Senior Project\\edge-ai-v2\\cifar10\\models\\baseline_tuned_model.pt",
     "output_dir": null,
     "only": null,
     "alpha": 0.5,
@@ -11,7 +11,7 @@
     "rounds": 10,
     "local_epochs": 1,
     "batch_size": 32,
-    "lr": 0.03,
+    "lr": 0.003,
     "deadline_factor": 4.0,
     "safety": 0.8,
     "min_work": 0.1,

@@ -49,10 +49,10 @@ def evaluate(model, loader):
         seen += x.size(0)
     return total_loss / seen, correct / seen
 CLIENT_TIERS = {
-    "high": {"ram_mb": 64.0, "threads": 4, "cpu_speed": 1.00, "bandwidth_mbps": 50.0, "dropout": 0.02},
-    "mid":  {"ram_mb": 8.0,  "threads": 2, "cpu_speed": 0.60, "bandwidth_mbps": 10.0, "dropout": 0.05},
-    "low":  {"ram_mb": 4.0,  "threads": 1, "cpu_speed": 0.35, "bandwidth_mbps": 1.0,  "dropout": 0.10},
-    "tiny": {"ram_mb": 1.0,  "threads": 1, "cpu_speed": 0.20, "bandwidth_mbps": 0.25, "dropout": 0.15},
+    "high": {"ram_mb": 256.0, "threads": 4, "cpu_speed": 1.00, "bandwidth_mbps": 100.0, "dropout": 0.02},
+    "mid":  {"ram_mb": 64.0,  "threads": 2, "cpu_speed": 0.60, "bandwidth_mbps": 50.0,  "dropout": 0.05},
+    "low":  {"ram_mb": 16.0,  "threads": 1, "cpu_speed": 0.35, "bandwidth_mbps": 20.0,  "dropout": 0.10},
+    "tiny": {"ram_mb": 8.0,   "threads": 1, "cpu_speed": 0.20, "bandwidth_mbps": 5.0,   "dropout": 0.15},
 }
 TIER_MIX = ["high", "high", "mid", "mid", "mid", "low", "low", "low", "tiny", "tiny"]
  
@@ -326,7 +326,7 @@ def parse_args():
     p.add_argument("--rounds", type=int, default=20)
     p.add_argument("--local-epochs", type=int, default=1)
     p.add_argument("--batch-size", type=int, default=32)
-    p.add_argument("--lr", type=float, default=0.03)
+    p.add_argument("--lr", type=float, default=0.003, help="small because we fine-tune the tuned 88% model")
     p.add_argument("--ram-policy", choices=["adapt", "drop"], default="adapt")
     p.add_argument("--deadline-factor", type=float, default=4.0,
                    help="hetero only: drop clients slower than factor x fastest (0 = no deadline)")

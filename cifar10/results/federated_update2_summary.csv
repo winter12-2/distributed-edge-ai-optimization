@@ -1,7 +1,7 @@
 experiment,partition,heterogeneous,compression,initial_test_accuracy,final_accuracy,best_accuracy,rounds_to_45pct,mean_round_time_s,total_time_s,mean_completion_rate,total_comm_mb,dropped_ram,dropped_offline,dropped_deadline,max_est_train_mem_mb
-iid_ideal,iid,False,none,0.8829,0.8362,0.8362,0,0.59,5.9,1.0,132.8,0,0,0,50.74
-noniid_a0.5_ideal,dirichlet(alpha=0.5),False,none,0.8829,0.8082,0.8112,0,0.72,7.2,1.0,132.8,0,0,0,50.74
-noniid_a0.1_ideal,dirichlet(alpha=0.1),False,none,0.8829,0.7914,0.7914,0,0.91,9.1,1.0,132.8,0,0,0,50.74
-iid_hetero,iid,True,none,0.8829,0.7703,0.7703,0,2.41,24.1,0.2,116.87,20,4,56,50.74
-noniid_a0.5_hetero,dirichlet(alpha=0.5),True,none,0.8829,0.1361,0.2037,0,2.21,22.1,0.3,117.53,20,3,47,50.74
-noniid_a0.5_hetero_int8,dirichlet(alpha=0.5),True,int8,0.8829,0.151,0.2516,0,1.86,18.6,0.29,79.19,20,3,48,50.74
+noniid_a0.5_ideal,dirichlet(alpha=0.5),False,none,0.8829,0.8699,0.8739,0,5.5,55.0,1.0,132.8,0,0,0,50.74
+noniid_a0.1_ideal,dirichlet(alpha=0.1),False,none,0.8829,0.8619,0.8631,0,6.43,64.3,1.0,132.8,0,0,0,50.74
+iid_hetero,iid,True,none,0.8829,0.8543,0.8678,0,6.18,61.8,0.66,128.15,0,7,27,50.74
+noniid_a0.5_hetero,dirichlet(alpha=0.5),True,none,0.8829,0.8595,0.8668,0,4.5,45.0,0.66,128.15,0,7,27,50.74
+noniid_a0.5_hetero_int8,dirichlet(alpha=0.5),True,int8,0.8829,0.8581,0.8671,0,4.09,40.9,0.65,81.85,0,7,28,50.74
+iid_ideal,iid,False,none,0.8829,0.8782,0.8827,0,2.5,25.0,1.0,132.8,0,0,0,50.74

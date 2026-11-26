@@ -242,7 +242,7 @@ def parse_args():
     p.add_argument("--rounds", type=int, default=10)
     p.add_argument("--local-epochs", type=int, default=1)
     p.add_argument("--batch-size", type=int, default=32)
-    p.add_argument("--lr", type=float, default=0.03)
+    p.add_argument("--lr", type=float, default=0.003, help="small because we fine-tune the tuned 88% model")
     p.add_argument("--deadline-factor", type=float, default=4.0)
     p.add_argument("--safety", type=float, default=0.8, help="selection plans for 80%% of the deadline")
     p.add_argument("--min-work", type=float, default=0.1, help="skip clients that can do less than this")
